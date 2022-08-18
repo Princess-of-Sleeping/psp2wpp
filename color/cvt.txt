@@ -1,0 +1,31 @@
+<script>
+// https://js.do/
+// https://www.peko-step.com/tool/tfcolor.html
+
+function cvt_from_float(fr, fg, fb){
+
+	var r = (fr * 255) & 0xFF;
+	var g = (fg * 255) & 0xFF;
+	var b = (fb * 255) & 0xFF;
+
+	var rgb = (r << 16) | (g << 8) | (b << 0);
+
+	document.write("RGB from float: " + (rgb >>> 0).toString(16) + "<br>");
+}
+
+function cvt_to_float(rgb){
+
+	var r = (rgb >> 16) & 0xFF;
+	var g = (rgb >> 8) & 0xFF;
+	var b = (rgb >> 0) & 0xFF;
+
+	document.write("RGB to float:<br>");
+	document.write("- R: " + (r / 255.0) + "<br>");
+	document.write("- G: " + (g / 255.0) + "<br>");
+	document.write("- B: " + (b / 255.0) + "<br>");
+}
+
+cvt_from_float(0.732142, 0.785714, 0.812500);
+cvt_to_float(0xbac8cf);
+
+</script>
