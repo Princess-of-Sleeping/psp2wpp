@@ -4,6 +4,10 @@ A PS Vita home background wave add plugin.
 
 You can install this plugin and add one custom wave (as name implies: wave++).
 
+**Currently only "HENkaku Ensõ" is supported without permanent installation** (because SceShell checks idstorage on boottime only).
+
+But if you already have the pre-theme color flag in idstorage you can use this plugin even if you don't have HENkaku Ensõ.
+
 <br>
 Example image of pinky color wave and flat blue sky.
 
