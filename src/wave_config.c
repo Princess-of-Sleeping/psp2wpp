@@ -376,29 +376,13 @@ const ConfReaderFunc conf_read_funcs[] = {
 	}
 };
 
-int wave_config_read(void){
+int wave_config_read(const char *path){
 
 	int res;
 
-	res = config_parse_by_path("ux0:data/waveparam.txt", conf_read_funcs, sizeof(conf_read_funcs) / sizeof(conf_read_funcs[0]));
-	if(res != 0x80010002){
+	res = config_parse_by_path(path, conf_read_funcs, sizeof(conf_read_funcs) / sizeof(conf_read_funcs[0]));
+	if(res != 0){
 		return res;
-	}
-
-	res = config_parse_by_path("sd0:data/waveparam.txt", conf_read_funcs, sizeof(conf_read_funcs) / sizeof(conf_read_funcs[0]));
-	if(res != 0x80010002){
-		return res;
-	}
-
-	if(vshSblAimgrIsTool() != 0 || vshSblAimgrIsTest() != 0){
-		res = config_parse_by_path("host0:data/waveparam.txt", conf_read_funcs, sizeof(conf_read_funcs) / sizeof(conf_read_funcs[0]));
-		if(res != 0x80010002){
-			return res;
-		}
-	}
-
-	if(res == 0x80010002){
-		return 1;
 	}
 
 	return 0;

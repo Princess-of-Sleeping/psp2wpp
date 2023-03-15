@@ -17,16 +17,201 @@
 #define HookImport(module_name, library_nid, func_nid, func_name) taiHookFunctionImport(&func_name ## _ref, module_name, library_nid, func_nid, func_name ## _patch)
 
 
-int wave_config_read(void);
+int wave_config_read(const char *path);
 extern SceWaveParam wave_param;
 
+SceBool is_enso;
+SceUID thid = -1, sema_id = -1;
+
+SceFColor *select_wave_color;
+
+void *(* ScePafGraphics_4E038C05)(void);
+void *(* FUN_8109defe)(void *a1, int a2);
+int (* FUN_810a8080)(void *a1, const char *name, const SceWaveParam *pWaveParam);
+
+
+int resolve_offsets(void){
+
+	int res;
+	tai_module_info_t moduleInfo;
+	SceKernelModuleInfo info;
+	void *text, *data;
+
+	moduleInfo.size = sizeof(moduleInfo);
+
+	res = taiGetModuleInfo("SceShell", &moduleInfo);
+	if(res < 0){
+		return res;
+	}
+
+	sceKernelGetModuleInfo(moduleInfo.modid, &info);
+
+	data = info.segments[1].vaddr;
+
+	switch(moduleInfo.module_nid){
+	case 0xB45216F4: // Tool 3.72-I
+		select_wave_color = (SceFColor *)(data + (0x815442B0 - 0x81532000)); // 0x122B0
+		break;
+	default:
+		sceClibPrintf("%s fingerprint 0x%08X\n", "SceShell", moduleInfo.module_nid);
+		select_wave_color = NULL;
+		break;
+	}
+
+	res = taiGetModuleInfo("ScePaf", &moduleInfo);
+	if(res < 0){
+		return res;
+	}
+
+	sceKernelGetModuleInfo(moduleInfo.modid, &info);
+
+	text = info.segments[0].vaddr;
+
+	switch(moduleInfo.module_nid){
+	case 0xCD679177: // CEX 3.60
+	case 0x0305714C: // CEX 3.61
+	case 0xE15A86ED: // CEX 3.63
+	case 0x73F90499: // CEX 3.65
+	case 0xE7A89CA9: // CEX 3.67
+	case 0x66EC0C5D: // CEX 3.68
+	case 0x52A49770: // CEX 3.69
+	case 0x78DF8738: // CEX 3.70
+	case 0x09111E96: // CEX 3.71
+	case 0xD5A425AF: // CEX 3.72
+	case 0x9CE470B4: // CEX 3.73
+	case 0x0DBFBA9B: // CEX 3.74
+		ScePafGraphics_4E038C05 = text + (0x7f7b8 | 1);
+		FUN_8109defe = text + (0x9d40e | 1);
+		FUN_810a8080 = text + (0xa7590 | 1);
+		break;
+	case 0xA081BFE1: // Tool 3.72-I
+		ScePafGraphics_4E038C05 = text + (0x802A8 | 1);
+		FUN_8109defe = text + (0x9defe | 1);
+		FUN_810a8080 = text + (0xa8080 | 1);
+		break;
+	default:
+		sceClibPrintf("%s fingerprint 0x%08X\n", "ScePaf", moduleInfo.module_nid);
+		ScePafGraphics_4E038C05 = NULL;
+		FUN_8109defe = NULL;
+		FUN_810a8080 = NULL;
+		break;
+	}
+
+	return 0;
+}
+
+const char * const wave_name_list[0x20] = {
+	"effects_default_0512_01",
+	"iboot",
+	"effects_0406_ruby",
+	"effects_0407_purple_01",
+	"effects_0408_01_orange",
+	"effects_0411_purple_02",
+	"effects_0415_A5",
+	"effects_0518_dalia",
+	"effects_0518_gray_FLAT",
+	"effects_0518_ruby",
+	"effects_A1",
+	"effects_black",
+	"effects_blue_FLAT",
+	"effects_blueTB_0513_01",
+	"effects_bluewhite_05",
+	"effects_casis",
+	"effects_green_0512_01",
+	"effects_koiao_0512_01",
+	"effects_maintosh",
+	"effects_marrygold",
+	"effects_peach_0512_001",
+	"effects_purple_01",
+	"effects_purplered",
+	"effects_yellow_0512_01",
+	"effects_redTB_0513_01",
+	"effects_limegreen_0513_02",
+	"effects_turquoise_0513_01",
+	"effects_color_vari_2g_01",
+	"effects_color_vari_2g_02",
+	"effects_color_vari_2g_03",
+	"effects_color_vari_2g_04",
+	"effects_original_01"
+};
+
+int load_waveparam(void){
+
+	int res;
+	char path[0x100];
+
+	if(ScePafGraphics_4E038C05 == NULL){
+		return -1;
+	}
+
+	for(int i=0;i<0x1F;i++){
+
+		res = -1;
+
+		if(res < 0 && (vshSblAimgrIsTool() == SCE_TRUE || vshSblAimgrIsTest() == SCE_TRUE)){
+			sceClibSnprintf(path, sizeof(path), "%sdata/waveparam_%s.txt", "host0:", wave_name_list[i]);
+			res = wave_config_read(path);
+		}
+
+		if(res < 0){
+			sceClibSnprintf(path, sizeof(path), "%sdata/waveparam_%s.txt", "ux0:", wave_name_list[i]);
+			res = wave_config_read(path);
+		}
+
+		if(res < 0){
+			sceClibSnprintf(path, sizeof(path), "%sdata/waveparam_%s.txt", "sd0:", wave_name_list[i]);
+			res = wave_config_read(path);
+		}
+
+		if(res >= 0){
+			if(select_wave_color != NULL && i < 0x1F){
+				select_wave_color[i].r = wave_param.selecter[0].r;
+				select_wave_color[i].g = wave_param.selecter[0].g;
+				select_wave_color[i].b = wave_param.selecter[0].b;
+				select_wave_color[i].a = wave_param.selecter[0].a;
+				select_wave_color[0x1F + i].r = wave_param.selecter[1].r;
+				select_wave_color[0x1F + i].g = wave_param.selecter[1].g;
+				select_wave_color[0x1F + i].b = wave_param.selecter[1].b;
+				select_wave_color[0x1F + i].a = wave_param.selecter[1].a;
+			}
+
+			void *wave_ctx = ScePafGraphics_4E038C05();
+			void *wave_info = FUN_8109defe(*(void **)(wave_ctx), 0);
+
+			wave_param.magic       = SCE_WAVE_PARAM_MAGIC;
+			wave_param.version     = 1;
+			wave_param.color_index = i;
+			wave_param.unk_0x0C    = 0;
+
+			FUN_810a8080(*(void **)(wave_info), wave_name_list[i], &wave_param);
+		}
+	}
+
+	return 0;
+}
 
 tai_hook_ref_t ScePafGraphics_45A01FA1_ref;
 int ScePafGraphics_45A01FA1_patch(SceWaveParam *pParam){
 
 	int res;
 
-	res = wave_config_read();
+	do {
+		res = wave_config_read("ux0:data/waveparam.txt");
+		if(res == 0 || res != 0x80010002){
+			break;
+		}
+
+		res = wave_config_read("sd0:data/waveparam.txt");
+		if(res == 0 || res != 0x80010002){
+			break;
+		}
+
+		res = wave_config_read("host0:data/waveparam.txt");
+		if(res == 0 || res != 0x80010002){
+			break;
+		}
+	} while(0);
+
 	if(res == 0){
 		wave_param.magic       = SCE_WAVE_PARAM_MAGIC;
 		wave_param.version     = 1;
@@ -78,6 +263,8 @@ int sceSysmoduleLoadModuleInternalWithArg_patch(SceSysmoduleInternalModuleId id,
 	if(res >= 0 && id == SCE_SYSMODULE_INTERNAL_PAF){
 		HookImport("SceShell", 0xa070d6a7, 0x45A01FA1, ScePafGraphics_45A01FA1);
 		HookImport("SceShell", 0x3d643ce8, 0xB9FB9BD6, ScePafMisc_B9FB9BD6);
+
+		resolve_offsets();
 	}
 
 	return res;
@@ -112,8 +299,6 @@ int vshIdStorageLookup_patch(SceUInt32 leaf, SceUInt32 offset, ScePVoid data, Sc
 	return res;
 }
 
-SceUID thid = -1, sema_id = -1;
-
 int color_change_thread(SceSize argc, ScePVoid argp){
 
 	int res;
@@ -124,7 +309,25 @@ int color_change_thread(SceSize argc, ScePVoid argp){
 			continue;
 		}
 
-		res = wave_config_read();
+		load_waveparam();
+
+		do {
+			res = wave_config_read("ux0:data/waveparam.txt");
+			if(res == 0 || res != 0x80010002){
+				break;
+			}
+
+			res = wave_config_read("sd0:data/waveparam.txt");
+			if(res == 0 || res != 0x80010002){
+				break;
+			}
+
+			res = wave_config_read("host0:data/waveparam.txt");
+			if(res == 0 || res != 0x80010002){
+				break;
+			}
+		} while(0);
+
 		if(res < 0){
 			continue;
 		}
@@ -135,6 +338,10 @@ int color_change_thread(SceSize argc, ScePVoid argp){
 		wave_param.unk_0x0C    = 0;
 
 		TAI_CONTINUE(int, ScePafGraphics_45A01FA1_ref, &wave_param);
+
+		SceUInt32 prev_index = scePafGraphicsCurrentWave;
+		scePafGraphicsCurrentWave = 0x20;
+		scePafGraphicsUpdateCurrentWave(prev_index, 1.0f);
 	}
 
 	return 0;
@@ -152,7 +359,7 @@ int psp2wpp_spawn_reload_server(void){
 	sema_id = res;
 
 	do {
-		res = sceKernelCreateThread("color_change_thread", color_change_thread, 0x60, 0x4000, 0, 0, NULL);
+		res = sceKernelCreateThread("color_change_thread", color_change_thread, 0x78, 0x2000, 0, 0, NULL);
 		if(res < 0){
 			break;
 		}
@@ -177,14 +384,36 @@ int psp2wpp_spawn_reload_server(void){
 int psp2wpp_main(void){
 
 	int res;
+	SceUInt64 syscall[2];
+
+	if(_vshKernelSearchModuleByName("SceSysStateMgr", syscall) >= 0){
+		is_enso = SCE_TRUE;
+	}else{
+		is_enso = SCE_FALSE;
+	}
+
+	if(is_enso != SCE_TRUE){
+		res = resolve_offsets();
+		if(res < 0){
+			return res;
+		}
+	}
 
 	res = psp2wpp_spawn_reload_server();
 	if(res < 0){
 		return res;
 	}
 
-	HookImport("SceShell", 0x03FCF19D, 0xC3C26339, sceSysmoduleLoadModuleInternalWithArg);
-	HookImport("SceShell", 0x35C5ACD4, 0x58BA5A8D, vshIdStorageLookup);
+	if(is_enso == SCE_TRUE){
+		HookImport("SceShell", 0x03FCF19D, 0xC3C26339, sceSysmoduleLoadModuleInternalWithArg);
+		HookImport("SceShell", 0x35C5ACD4, 0x58BA5A8D, vshIdStorageLookup);
+	}else{
+		load_waveparam();
+
+		SceUInt32 prev_index = scePafGraphicsCurrentWave;
+		scePafGraphicsCurrentWave = 0x20;
+		scePafGraphicsUpdateCurrentWave(prev_index, 1.0f);
+	}
 
 	return 0;
 }

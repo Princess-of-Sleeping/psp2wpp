@@ -36,6 +36,7 @@ target_link_libraries(${PROJECT_NAME}
   ScePaf_stub_weak
   SceIofilemgr_stub
   SceKernelThreadMgr_stub
+  SceKernelModulemgr_stub
   SceLibKernel_stub
   SceVshBridge_stub
   taihen_stub
