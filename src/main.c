@@ -58,6 +58,8 @@ int resolve_offsets(void){
 		break;
 	}
 
+	moduleInfo.size = sizeof(moduleInfo);
+
 	res = taiGetModuleInfo("ScePaf", &moduleInfo);
 	if(res < 0){
 		return res;
@@ -84,6 +86,7 @@ int resolve_offsets(void){
 		FUN_8109defe = text + (0x9d40e | 1);
 		FUN_810a8080 = text + (0xa7590 | 1);
 		break;
+	case 0xD4018D85: // Tool 3.60-I tool_for_cex
 	case 0xA081BFE1: // Tool 3.72-I
 		ScePafGraphics_4E038C05 = text + (0x802A8 | 1);
 		FUN_8109defe = text + (0x9defe | 1);
@@ -149,6 +152,16 @@ int load_waveparam(void){
 		res = -1;
 
 		if(res < 0 && (vshSblAimgrIsTool() == SCE_TRUE || vshSblAimgrIsTest() == SCE_TRUE)){
+			sceClibSnprintf(path, sizeof(path), "%sdata/waveparams/%d.txt", "host0:", i);
+			res = wave_config_read(path);
+		}
+
+		if(res < 0){
+			sceClibSnprintf(path, sizeof(path), "%sdata/waveparams/%d.txt", "ux0:", i);
+			res = wave_config_read(path);
+		}
+
+		if(res < 0 && (vshSblAimgrIsTool() == SCE_TRUE || vshSblAimgrIsTest() == SCE_TRUE)){
 			sceClibSnprintf(path, sizeof(path), "%sdata/waveparam_%s.txt", "host0:", wave_name_list[i]);
 			res = wave_config_read(path);
 		}
@@ -175,19 +188,108 @@ int load_waveparam(void){
 				select_wave_color[0x1F + i].a = wave_param.selecter[1].a;
 			}
 
-			void *wave_ctx = ScePafGraphics_4E038C05();
-			void *wave_info = FUN_8109defe(*(void **)(wave_ctx), 0);
-
 			wave_param.magic       = SCE_WAVE_PARAM_MAGIC;
 			wave_param.version     = 1;
 			wave_param.color_index = i;
 			wave_param.unk_0x0C    = 0;
+
+			void *wave_ctx = ScePafGraphics_4E038C05();
+			void *wave_info = FUN_8109defe(*(void **)(wave_ctx), 0);
 
 			FUN_810a8080(*(void **)(wave_info), wave_name_list[i], &wave_param);
 		}
 	}
 
 	return 0;
+}
+
+int waveparam_update_thread(SceSize argc, ScePVoid argp){
+
+	int res;
+
+	while(1){
+		res = sceKernelWaitSema(sema_id, 1, NULL);
+		if(res < 0){
+			sceClibPrintf("sceKernelWaitSema 0x%X\n", res);
+			continue;
+		}
+
+		load_waveparam();
+
+		if(is_enso == SCE_TRUE){
+			do {
+				res = wave_config_read("ux0:data/waveparam.txt");
+				if(res == 0 || res != 0x80010002){
+					break;
+				}
+
+				res = wave_config_read("sd0:data/waveparam.txt");
+				if(res == 0 || res != 0x80010002){
+					break;
+				}
+
+				res = wave_config_read("host0:data/waveparam.txt");
+				if(res == 0 || res != 0x80010002){
+					break;
+				}
+			} while(0);
+
+			if(res < 0){
+				// sceClibPrintf("waveparam.txt not found\n");
+			}else{
+				wave_param.magic       = SCE_WAVE_PARAM_MAGIC;
+				wave_param.version     = 1;
+				wave_param.color_index = 0x1F;
+				wave_param.unk_0x0C    = 0;
+
+				void *wave_ctx = ScePafGraphics_4E038C05();
+				void *wave_info = FUN_8109defe(*(void **)(wave_ctx), 0);
+
+				FUN_810a8080(*(void **)(wave_info), wave_name_list[0x1F], &wave_param);
+				// TAI_CONTINUE(int, ScePafGraphics_45A01FA1_ref, &wave_param);
+			}
+		}
+
+		SceUInt32 prev_index = scePafGraphicsCurrentWave;
+		scePafGraphicsCurrentWave = 0x20;
+		scePafGraphicsUpdateCurrentWave(prev_index, 1.0f);
+	}
+
+	return 0;
+}
+
+int psp2wpp_spawn_reload_server(void){
+
+	int res;
+
+	res = sceKernelCreateSema("psp2wpp_sema", SCE_KERNEL_ATTR_OPENABLE, 0, 1, NULL);
+	if(res < 0){
+		return res;
+	}
+
+	sema_id = res;
+
+	do {
+		res = sceKernelCreateThread("waveparam_update_thread", waveparam_update_thread, 0x78, 0x2000, 0, 0, NULL);
+		if(res < 0){
+			break;
+		}
+
+		thid = res;
+
+		res = sceKernelStartThread(thid, 0, NULL);
+		if(res >= 0){
+			return 0;
+		}
+
+		sceKernelDelayThread(thid);
+		thid = -1;
+	} while(0);
+
+	sceKernelDelayThread(sema_id);
+	sema_id = -1;
+
+	return res;
 }
 
 tai_hook_ref_t ScePafGraphics_45A01FA1_ref;
@@ -234,6 +336,8 @@ int ScePafMisc_B9FB9BD6_patch(void **dst, const char *path, int a3, int a4, void
 
 	if(0 == sce_paf_strcmp(path, "pd0:wave/waveparam.bin")){
 
+		load_waveparam();
+
 		res = sceIoGetstat(path, &stat);
 
 		if(res < 0){
@@ -265,6 +369,7 @@ int sceSysmoduleLoadModuleInternalWithArg_patch(SceSysmoduleInternalModuleId id,
 		HookImport("SceShell", 0x3d643ce8, 0xB9FB9BD6, ScePafMisc_B9FB9BD6);
 
 		resolve_offsets();
+		psp2wpp_spawn_reload_server();
 	}
 
 	return res;
@@ -299,88 +404,6 @@ int vshIdStorageLookup_patch(SceUInt32 leaf, SceUInt32 offset, ScePVoid data, Sc
 	return res;
 }
 
-int color_change_thread(SceSize argc, ScePVoid argp){
-
-	int res;
-
-	while(1){
-		res = sceKernelWaitSema(sema_id, 1, NULL);
-		if(res < 0){
-			continue;
-		}
-
-		load_waveparam();
-
-		do {
-			res = wave_config_read("ux0:data/waveparam.txt");
-			if(res == 0 || res != 0x80010002){
-				break;
-			}
-
-			res = wave_config_read("sd0:data/waveparam.txt");
-			if(res == 0 || res != 0x80010002){
-				break;
-			}
-
-			res = wave_config_read("host0:data/waveparam.txt");
-			if(res == 0 || res != 0x80010002){
-				break;
-			}
-		} while(0);
-
-		if(res < 0){
-			continue;
-		}
-
-		wave_param.magic       = SCE_WAVE_PARAM_MAGIC;
-		wave_param.version     = 1;
-		wave_param.color_index = 0x1F;
-		wave_param.unk_0x0C    = 0;
-
-		TAI_CONTINUE(int, ScePafGraphics_45A01FA1_ref, &wave_param);
-
-		SceUInt32 prev_index = scePafGraphicsCurrentWave;
-		scePafGraphicsCurrentWave = 0x20;
-		scePafGraphicsUpdateCurrentWave(prev_index, 1.0f);
-	}
-
-	return 0;
-}
-
-int psp2wpp_spawn_reload_server(void){
-
-	int res;
-
-	res = sceKernelCreateSema("psp2wpp_sema", SCE_KERNEL_ATTR_OPENABLE, 0, 1, NULL);
-	if(res < 0){
-		return res;
-	}
-
-	sema_id = res;
-
-	do {
-		res = sceKernelCreateThread("color_change_thread", color_change_thread, 0x78, 0x2000, 0, 0, NULL);
-		if(res < 0){
-			break;
-		}
-
-		thid = res;
-
-		res = sceKernelStartThread(thid, 0, NULL);
-		if(res >= 0){
-			return 0;
-		}
-
-		sceKernelDelayThread(thid);
-		thid = -1;
-	} while(0);
-
-	sceKernelDelayThread(sema_id);
-	sema_id = -1;
-
-	return res;
-}
-
 int psp2wpp_main(void){
 
 	int res;
@@ -392,22 +415,20 @@ int psp2wpp_main(void){
 		is_enso = SCE_FALSE;
 	}
 
-	if(is_enso != SCE_TRUE){
-		res = resolve_offsets();
-		if(res < 0){
-			return res;
-		}
-	}
-
-	res = psp2wpp_spawn_reload_server();
-	if(res < 0){
-		return res;
-	}
-
 	if(is_enso == SCE_TRUE){
 		HookImport("SceShell", 0x03FCF19D, 0xC3C26339, sceSysmoduleLoadModuleInternalWithArg);
 		HookImport("SceShell", 0x35C5ACD4, 0x58BA5A8D, vshIdStorageLookup);
 	}else{
+		res = resolve_offsets();
+		if(res < 0){
+			return res;
+		}
+
+		res = psp2wpp_spawn_reload_server();
+		if(res < 0){
+			return res;
+		}
+
 		load_waveparam();
 
 		SceUInt32 prev_index = scePafGraphicsCurrentWave;
