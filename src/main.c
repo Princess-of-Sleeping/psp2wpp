@@ -49,6 +49,25 @@ int resolve_offsets(void){
 	data = info.segments[1].vaddr;
 
 	switch(moduleInfo.module_nid){
+	case 0x0552F692: // CEX 3.60
+	case 0x532155E5: // CEX 3.61
+	case 0xBB4B0A3E: // CEX 3.63
+		select_wave_color = (SceFColor *)(data + (0x81554530 - 0x81542000)); // 0x12530
+		break;
+	case 0x5549BF1F: // CEX 3.65
+	case 0x34B4D82E: // CEX 3.67
+	case 0x12DAC0F3: // CEX 3.68
+	case 0x0703C828: // CEX 3.69
+	case 0x2053B5A5: // CEX 3.70
+	case 0xF476E785: // CEX 3.71
+	case 0x939FFBE9: // CEX 3.72
+	case 0x734D476A: // CEX 3.73
+	case 0x51CB6207: // CEX 3.74
+		select_wave_color = (SceFColor *)(data + (0x81555540 - 0x81543000)); // 0x12540
+		break;
+	case 0xB96BCFC3: // Tool 3.60-I tool_for_cex
+		select_wave_color = (SceFColor *)(data + (0x81554530 - 0x81542000)); // 0x12530
+		break;
 	case 0xB45216F4: // Tool 3.72-I
 		select_wave_color = (SceFColor *)(data + (0x815442B0 - 0x81532000)); // 0x122B0
 		break;
