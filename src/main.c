@@ -120,6 +120,7 @@ const char * const wave_name_list[0x20] = {
 	"effects_blueTB_0513_01",
 	"effects_bluewhite_05",
 	"effects_casis",
+
 	"effects_green_0512_01",
 	"effects_koiao_0512_01",
 	"effects_maintosh",
@@ -138,6 +139,13 @@ const char * const wave_name_list[0x20] = {
 	"effects_original_01"
 };
 
+const SceUInt32 wave_index_translation_list[0x20] = {
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x08,
+	0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10,
+	0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x18, 0x19,
+	0x1A, 0x17, 0x07, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F
+};
+
 int load_waveparam(void){
 
 	int res;
@@ -148,6 +156,8 @@ int load_waveparam(void){
 	}
 
 	for(int i=0;i<0x1F;i++){
+
+		sceClibMemset(&wave_param, 0, sizeof(wave_param));
 
 		res = -1;
 
@@ -161,22 +171,9 @@ int load_waveparam(void){
 			res = wave_config_read(path);
 		}
 
-		if(res < 0 && (vshSblAimgrIsTool() == SCE_TRUE || vshSblAimgrIsTest() == SCE_TRUE)){
-			sceClibSnprintf(path, sizeof(path), "%sdata/waveparam_%s.txt", "host0:", wave_name_list[i]);
-			res = wave_config_read(path);
-		}
-
-		if(res < 0){
-			sceClibSnprintf(path, sizeof(path), "%sdata/waveparam_%s.txt", "ux0:", wave_name_list[i]);
-			res = wave_config_read(path);
-		}
-
-		if(res < 0){
-			sceClibSnprintf(path, sizeof(path), "%sdata/waveparam_%s.txt", "sd0:", wave_name_list[i]);
-			res = wave_config_read(path);
-		}
-
 		if(res >= 0){
+			SceUInt32 wave_index = wave_index_translation_list[i];
+
 			if(select_wave_color != NULL && i < 0x1F){
 				select_wave_color[i].r = wave_param.selecter[0].r;
 				select_wave_color[i].g = wave_param.selecter[0].g;
@@ -190,13 +187,13 @@ int load_waveparam(void){
 
 			wave_param.magic       = SCE_WAVE_PARAM_MAGIC;
 			wave_param.version     = 1;
-			wave_param.color_index = i;
+			wave_param.color_index = wave_index;
 			wave_param.unk_0x0C    = 0;
 
 			void *wave_ctx = ScePafGraphics_4E038C05();
 			void *wave_info = FUN_8109defe(*(void **)(wave_ctx), 0);
 
-			FUN_810a8080(*(void **)(wave_info), wave_name_list[i], &wave_param);
+			FUN_810a8080(*(void **)(wave_info), wave_name_list[wave_index], &wave_param);
 		}
 	}
 
@@ -217,6 +214,9 @@ int waveparam_update_thread(SceSize argc, ScePVoid argp){
 		load_waveparam();
 
 		if(is_enso == SCE_TRUE){
+
+			sceClibMemset(&wave_param, 0, sizeof(wave_param));
+
 			do {
 				res = wave_config_read("ux0:data/waveparam.txt");
 				if(res == 0 || res != 0x80010002){
@@ -246,7 +246,6 @@ int waveparam_update_thread(SceSize argc, ScePVoid argp){
 				void *wave_info = FUN_8109defe(*(void **)(wave_ctx), 0);
 
 				FUN_810a8080(*(void **)(wave_info), wave_name_list[0x1F], &wave_param);
-				// TAI_CONTINUE(int, ScePafGraphics_45A01FA1_ref, &wave_param);
 			}
 		}
 
@@ -296,6 +295,8 @@ tai_hook_ref_t ScePafGraphics_45A01FA1_ref;
 int ScePafGraphics_45A01FA1_patch(SceWaveParam *pParam){
 
 	int res;
+
+	sceClibMemset(&wave_param, 0, sizeof(wave_param));
 
 	do {
 		res = wave_config_read("ux0:data/waveparam.txt");
