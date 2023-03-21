@@ -38,7 +38,7 @@ const WaveMemberStrMap waveMemberStrMap_top[] = {
 	wave_map_entry(wave_param, selecter[0].g),
 	wave_map_entry(wave_param, selecter[0].b),
 	wave_map_entry(wave_param, selecter[0].a),
-	wave_map_entry(wave_param, selecter[0].r),
+	wave_map_entry(wave_param, selecter[1].r),
 	wave_map_entry(wave_param, selecter[1].g),
 	wave_map_entry(wave_param, selecter[1].b),
 	wave_map_entry(wave_param, selecter[1].a)
