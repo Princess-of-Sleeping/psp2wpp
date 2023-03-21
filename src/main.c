@@ -276,6 +276,45 @@ int waveparam_update_thread(SceSize argc, ScePVoid argp){
 	return 0;
 }
 
+int waveparam_update_thread_2(SceSize argc, ScePVoid argp){
+
+	SceIoStat last_stat;
+
+	if(is_enso == SCE_TRUE){
+		sceKernelDelayThread(9 * 1000 * 1000);
+	}
+
+	while(1){
+		sceKernelDelayThread(500 * 1000);
+
+		SceIoStat stat;
+		sceIoGetstat("host0:data/waveparams/2.txt", &stat);
+
+		if(sceClibMemcmp(&(last_stat.st_mtime), &(stat.st_mtime), sizeof(SceDateTime)) != 0){
+			sceClibMemset(&wave_param, 0, sizeof(wave_param));
+
+			wave_param.magic       = SCE_WAVE_PARAM_MAGIC;
+			wave_param.version     = 1;
+			wave_param.color_index = 2;
+			wave_param.unk_0x0C    = 0;
+
+			wave_config_read("host0:data/waveparams/2.txt");
+			sceClibMemcpy(&(last_stat.st_mtime), &(stat.st_mtime), sizeof(SceDateTime));
+
+			void *wave_ctx = ScePafGraphics_4E038C05();
+			void *wave_info = FUN_8109defe(*(void **)(wave_ctx), 0);
+
+			FUN_810a8080(*(void **)(wave_info), wave_name_list[2], &wave_param);
+
+			SceUInt32 prev_index = scePafGraphicsCurrentWave;
+			scePafGraphicsCurrentWave = 0x20;
+			scePafGraphicsUpdateCurrentWave(prev_index, 1.0f);
+		}
+	}
+
+	return 0;
+}
+
 int psp2wpp_spawn_reload_server(void){
 
 	int res;
