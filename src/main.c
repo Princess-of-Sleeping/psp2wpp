@@ -354,19 +354,20 @@ int ScePafGraphics_45A01FA1_patch(SceWaveParam *pParam){
 
 	int res;
 
-	sceClibMemset(&wave_param, 0, sizeof(wave_param));
-
 	do {
+		sceClibMemset(&wave_param, 0, sizeof(wave_param));
 		res = wave_config_read("ux0:data/waveparam.txt");
 		if(res == 0 || res != 0x80010002){
 			break;
 		}
 
+		sceClibMemset(&wave_param, 0, sizeof(wave_param));
 		res = wave_config_read("sd0:data/waveparam.txt");
 		if(res == 0 || res != 0x80010002){
 			break;
 		}
 
+		sceClibMemset(&wave_param, 0, sizeof(wave_param));
 		res = wave_config_read("host0:data/waveparam.txt");
 		if(res == 0 || res != 0x80010002){
 			break;
@@ -374,6 +375,8 @@ int ScePafGraphics_45A01FA1_patch(SceWaveParam *pParam){
 	} while(0);
 
 	if(res == 0){
+		sceClibMemcpy(pParam->selecter, wave_param.selecter, sizeof(pParam->selecter));
+
 		wave_param.magic       = SCE_WAVE_PARAM_MAGIC;
 		wave_param.version     = 1;
 		wave_param.color_index = 0x1F;
